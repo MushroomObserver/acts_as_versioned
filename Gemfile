@@ -1,7 +1,9 @@
-source 'http://rubygems.org'
+source 'https://rubygems.org'
+
+gemspec
 
 group :development do
-  gem 'rails',        '>=3.0.9'
-  gem 'sqlite3-ruby'
-  gem 'mysql'
+  gem 'sqlite3'
+  gem 'rake'
+  gem 'appraisal'
 end

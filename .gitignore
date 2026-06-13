@@ -6,3 +6,5 @@ pkg
 *.sqlite3.db
 .project
 Gemfile.lock
+gemfiles/*.gemfile.lock
+.rubocop.yml

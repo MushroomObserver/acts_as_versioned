@@ -67,6 +67,7 @@ ActiveRecord::Schema.define(:version => 0) do
     t.column :longitude, :float
     t.column :doesnt_trigger_version,:string
     t.column :version, :integer
+    t.column :user_id, :integer
   end
 
   create_table :landmark_versions, :force => true do |t|
@@ -76,6 +77,11 @@ ActiveRecord::Schema.define(:version => 0) do
     t.column :longitude, :float
     t.column :doesnt_trigger_version,:string
     t.column :version, :integer
+    t.column :user_id, :integer
+  end
+
+  create_table :users, :force => true do |t|
+    t.column :name, :string
   end
   
   add_index :landmark_versions, [:landmark_id, :version], :unique => true
