@@ -1,6 +1,7 @@
 require File.join(File.dirname(__FILE__), 'abstract_unit')
 require File.join(File.dirname(__FILE__), 'fixtures/page')
 require File.join(File.dirname(__FILE__), 'fixtures/widget')
+require File.join(File.dirname(__FILE__), 'fixtures/landmark')
 
 class VersionedTest < ActiveSupport::TestCase
   fixtures :pages, :page_versions, :locked_pages, :locked_pages_revisions, :authors, :landmarks, :landmark_versions
@@ -21,7 +22,7 @@ class VersionedTest < ActiveSupport::TestCase
     p.save_without_revision
 
     p.without_revision do
-      p.update_attributes :title => 'changed'
+      p.update :title => 'changed'
     end
 
     assert_equal old_versions, p.versions.count
@@ -149,11 +150,11 @@ class VersionedTest < ActiveSupport::TestCase
     assert_equal 1, p.version # version does not increment
     assert_equal 1, p.versions.count
 
-    p.update_attributes(:title => 'new title')
+    p.update(:title => 'new title')
     assert_equal 1, p.version # version does not increment
     assert_equal 1, p.versions.count
 
-    p.update_attributes(:title => 'a title')
+    p.update(:title => 'a title')
     assert_equal 2, p.version
     assert_equal 2, p.versions.count
 
@@ -170,11 +171,11 @@ class VersionedTest < ActiveSupport::TestCase
     assert_equal 1, p.version # version does not increment
     assert_equal 1, p.versions.count
 
-    p.update_attributes(:title => 'a title')
+    p.update(:title => 'a title')
     assert_equal 1, p.version # version does not increment
     assert_equal 1, p.versions.count
 
-    p.update_attributes(:title => 'b title')
+    p.update(:title => 'b title')
     assert_equal 2, p.version
     assert_equal 2, p.versions.count
 
@@ -196,14 +197,14 @@ class VersionedTest < ActiveSupport::TestCase
 
   def test_version_max_limit
     p = LockedPage.create! :title => "title"
-    p.update_attributes(:title => "title1")
-    p.update_attributes(:title => "title2")
+    p.update(:title => "title1")
+    p.update(:title => "title2")
     5.times do |i|
       p.title = "title#{i}"
       p.save
       assert_equal "title#{i}", p.title
       assert_equal (i+4), p.lock_version
-      assert p.versions(true).size <= 2, "locked version can only store 2 versions"
+      assert p.versions.reload.size <= 2, "locked version can only store 2 versions"
     end
   end
 
@@ -216,29 +217,29 @@ class VersionedTest < ActiveSupport::TestCase
   def test_track_altered_attributes
     p = LockedPage.create! :title => "title"
     assert_equal 1, p.lock_version
-    assert_equal 1, p.versions(true).size
+    assert_equal 1, p.versions.reload.size
 
     p.body = 'whoa'
     assert !p.save_version?
     p.save
     assert_equal 2, p.lock_version # still increments version because of optimistic locking
-    assert_equal 1, p.versions(true).size
+    assert_equal 1, p.versions.reload.size
 
     p.title = 'updated title'
     assert p.save_version?
     p.save
     assert_equal 3, p.lock_version
-    assert_equal 1, p.versions(true).size # version 1 deleted
+    assert_equal 1, p.versions.reload.size # version 1 deleted
 
     p.title = 'updated title!'
     assert p.save_version?
     p.save
     assert_equal 4, p.lock_version
-    assert_equal 2, p.versions(true).size # version 1 deleted
+    assert_equal 2, p.versions.reload.size # version 1 deleted
   end
 
   def test_find_versions
-    assert_equal 1, locked_pages(:welcome).versions.find(:all, :conditions => ['title LIKE ?', '%weblog%']).size
+    assert_equal 1, locked_pages(:welcome).versions.where('title LIKE ?', '%weblog%').size
   end
 
   def test_find_version
@@ -261,20 +262,23 @@ class VersionedTest < ActiveSupport::TestCase
   end
 
   def test_referential_integrity
+    page_id = pages(:welcome).id
+    versions_for_page = Page::Version.where(:page_id => page_id).count
+    assert versions_for_page > 0, "fixture precondition: versions exist"
     pages(:welcome).destroy
     assert_equal 0, Page.count
-    assert_equal 0, Page::Version.count
+    # Default: destroying the parent does NOT remove its versions.
+    assert_equal versions_for_page, Page::Version.where(:page_id => page_id).count
   end
 
   def test_association_options
     association = Page.reflect_on_association(:versions)
     options = association.options
-    assert_equal :delete_all, options[:dependent]
+    assert_nil options[:dependent], "default has no :dependent"
 
     association = Widget.reflect_on_association(:versions)
     options = association.options
     assert_equal :nullify, options[:dependent]
-    assert_equal 'version desc', options[:order]
     assert_equal 'widget_id', options[:foreign_key]
 
     widget = Widget.create! :name => 'new widget'
@@ -366,5 +370,68 @@ class VersionedTest < ActiveSupport::TestCase
       end
     end
     assert ActiveRecord::Base.lock_optimistically
+  end
+
+  def test_loaded_versions_cache_includes_new_version_after_save
+    l = Landmark.create!(:name => 'Original', :latitude => 0.0, :longitude => 0.0)
+    l.versions.to_a
+    assert l.versions.loaded?, "precondition: versions should be loaded"
+
+    l.update(:name => 'Updated')
+
+    assert_equal 2, l.versions.size
+    assert_equal 'Updated', l.versions.last.name
+  end
+
+  def test_unloaded_versions_collection_stays_unloaded_after_save
+    l = Landmark.create!(:name => 'Original', :latitude => 0.0, :longitude => 0.0)
+    assert !l.versions.loaded?, "precondition: versions should not be loaded"
+
+    l.update(:name => 'Updated')
+
+    assert !l.versions.loaded?,
+           "save should not have force-loaded the versions collection"
+  end
+
+  def test_versioned_class_autowires_user_belongs_to_when_table_has_user_id
+    reflection = Landmark.versioned_class.reflect_on_association(:user)
+    assert_not_nil reflection, "expected belongs_to :user on Landmark::Version"
+    assert_equal :belongs_to, reflection.macro
+    assert_equal '::User', reflection.options[:class_name]
+    assert_equal true, reflection.options[:optional]
+  end
+
+  def test_versioned_class_does_not_autowire_user_when_no_user_id_column
+    assert_nil Page.versioned_class.reflect_on_association(:user),
+               "Page::Version has no user_id column; should not auto-wire"
+  end
+
+  def test_extend_block_belongs_to_user_overrides_autowire
+    reflection = Sighting.versioned_class.reflect_on_association(:user)
+    assert_not_nil reflection
+    assert_equal :reporter_id, reflection.options[:foreign_key],
+                 "expected :extend's foreign_key to win over auto-wire's default"
+  end
+
+  def test_versioned_user_resolves_to_user_record
+    user = User.create!(:name => 'Alice')
+    l = Landmark.create!(:name => 'Eiffel Tower', :latitude => 48.85,
+                        :longitude => 2.29, :user_id => user.id)
+    assert_equal user, l.versions.last.user
+  end
+
+  def test_loaded_versions_cache_stays_consistent_under_strict_loading
+    Landmark.strict_loading_by_default = true
+    l = Landmark.create!(:name => 'Original', :latitude => 0.0, :longitude => 0.0)
+    loaded = Landmark.includes(:versions).find(l.id)
+    assert loaded.versions.loaded?, "precondition: eager-loaded versions should be loaded"
+
+    assert_nothing_raised do
+      loaded.update(:name => 'Updated')
+    end
+    assert_equal 2, loaded.versions.size
+    assert_equal 'Updated', loaded.versions.last.name
+  ensure
+    Landmark.strict_loading_by_default = false
   end
 end

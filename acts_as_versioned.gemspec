@@ -13,8 +13,8 @@ Gem::Specification.new do |s|
   ## If your rubyforge_project name is different, then edit it and comment out
   ## the sub! line in the Rakefile
   s.name              = 'mo_acts_as_versioned'
-  s.version           = '0.6.6'
-  s.date              = '2022-06-12'
+  s.version           = '0.8.0'
+  s.date              = '2026-06-13'
   s.rubyforge_project = 'acts_as_versioned'
 
   ## Make sure your summary is short. The description may be as long
@@ -50,7 +50,7 @@ Gem::Specification.new do |s|
 
   ## List your development dependencies here. Development dependencies are
   ## those that are only needed during development
-  s.add_development_dependency('sqlite3-ruby', ['>= 1.3.1'])
+  s.add_development_dependency('sqlite3', ['>= 1.3.1'])
 
   ## Leave this section as-is. It will be automatically generated from the
   ## contents of your Git repository via the gemspec task. DO NOT REMOVE
