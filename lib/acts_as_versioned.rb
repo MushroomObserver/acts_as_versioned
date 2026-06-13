@@ -316,17 +316,20 @@ module ActiveRecord # :nodoc:
                                    class_name: "::#{self}",
                                    foreign_key: versioned_foreign_key)
 
-        # Auto-wire belongs_to :user on the version class when the versioned
-        # table carries a user_id column, so callers get `version.user`
-        # without hand-defining the association on every host model.
-        has_user_id = versioned_class.column_names.include?("user_id") rescue false
-        if has_user_id && !versioned_class.reflect_on_association(:user)
-          versioned_class.belongs_to(:user, class_name: "::User", optional: true)
-        end
-
         if options[:extend].is_a?(Module)
           versioned_class.send(:include,
                                options[:extend])
+        end
+
+        # Auto-wire belongs_to :user on the version class when the versioned
+        # table carries a user_id column, so callers get `version.user`
+        # without hand-defining the association on every host model. Runs
+        # AFTER the :extend module so any host-defined belongs_to :user
+        # (different FK, different class_name, etc.) wins via the
+        # reflect_on_association idempotency check.
+        has_user_id = versioned_class.column_names.include?("user_id") rescue false
+        if has_user_id && !versioned_class.reflect_on_association(:user)
+          versioned_class.belongs_to(:user, class_name: "::User", optional: true)
         end
         return unless version_sequence_name
 

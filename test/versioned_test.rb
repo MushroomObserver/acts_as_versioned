@@ -406,6 +406,13 @@ class VersionedTest < ActiveSupport::TestCase
                "Page::Version has no user_id column; should not auto-wire"
   end
 
+  def test_extend_block_belongs_to_user_overrides_autowire
+    reflection = Sighting.versioned_class.reflect_on_association(:user)
+    assert_not_nil reflection
+    assert_equal :reporter_id, reflection.options[:foreign_key],
+                 "expected :extend's foreign_key to win over auto-wire's default"
+  end
+
   def test_versioned_user_resolves_to_user_record
     user = User.create!(:name => 'Alice')
     l = Landmark.create!(:name => 'Eiffel Tower', :latitude => 48.85,

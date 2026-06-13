@@ -83,6 +83,23 @@ ActiveRecord::Schema.define(:version => 0) do
   create_table :users, :force => true do |t|
     t.column :name, :string
   end
+
+  create_table :sightings, :force => true do |t|
+    t.column :note, :string
+    t.column :version, :integer
+    t.column :user_id, :integer
+    t.column :reporter_id, :integer
+  end
+
+  create_table :sighting_versions, :force => true do |t|
+    t.column :sighting_id, :integer
+    t.column :note, :string
+    t.column :version, :integer
+    t.column :user_id, :integer
+    t.column :reporter_id, :integer
+  end
+
+  add_index :sighting_versions, [:sighting_id, :version], :unique => true
   
   add_index :landmark_versions, [:landmark_id, :version], :unique => true
 end
